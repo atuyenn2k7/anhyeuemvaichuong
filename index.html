@@ -1,43 +1,57 @@
-<!doctype html>
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Chữ rơi tình yêu</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chữ rơi tình yêu</title>
 
-<link href="https://fonts.googleapis.com/css2?family=Satisfy&display=swap" rel="stylesheet" />
+  <!-- Font viết tay Satisfy từ Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Satisfy&display=swap" rel="stylesheet" />
 
-<style>
-  html, body {
-    margin: 0; padding: 0; height: 100%; width: 100%;
-    overflow: hidden;
-    background: url('https://i.imgur.com/4Vix406.jpeg') no-repeat center center fixed;
-    background-size: cover;
-    perspective: 1000px;
-    touch-action: none;
-    font-family: 'Satisfy', cursive;
-  }
+  <style>
+    /* Reset & cơ bản */
+    * {
+      margin: 0; padding: 0; box-sizing: border-box;
+    }
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: url('https://i.imgur.com/4Vix406.jpeg') no-repeat center center fixed;
+      background-size: cover;
+      font-family: 'Satisfy', cursive;
+      user-select: none;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
 
-  #falling-area {
-    position: relative;
-    width: 100vw;
-    height: 100vh;
-    transform-style: preserve-3d;
-    will-change: transform;
-    cursor: grab;
-    user-select: none;
-  }
+    #falling-area {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      perspective: 1000px;
+      transform-style: preserve-3d;
+      will-change: transform;
+      cursor: grab;
+      transform-origin: center center;
+      overflow: visible;
+      transition: transform 1.5s ease; /* Để animation hồi về */
+    }
 
-  .falling-word {
-    position: absolute;
-    top: -50px;
-    white-space: nowrap;
-    pointer-events: none;
-    font-weight: bold;
-    text-shadow: none;
-  }
-</style>
+    .falling-word {
+      position: absolute;
+      top: -50px;
+      font-weight: bold;
+      white-space: nowrap;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    audio {
+      display: none;
+    }
+  </style>
 </head>
 <body>
   <div id="falling-area"></div>
@@ -46,23 +60,7 @@
 
   <script>
     const fallingArea = document.getElementById("falling-area");
-    const music = document.getElementById("bg-music");
-
-    let musicStarted = false;
-
-    // Bật nhạc khi người dùng click lần đầu (bất cứ đâu)
-    function startMusic() {
-      if (musicStarted) return;
-      musicStarted = true;
-      music.play().catch(e => {
-        // Lỗi nếu có, có thể do chính sách trình duyệt
-        console.log("Không thể phát nhạc tự động:", e);
-      });
-      // Bỏ listener sau khi đã play
-      document.body.removeEventListener("click", startMusic);
-    }
-
-    document.body.addEventListener("click", startMusic);
+    const bgMusic = document.getElementById("bg-music");
 
     const words = [
       "Bên em là đủ", "Yêu em nhiều lắm", "Anh cần em", "Em là định mệnh", "Em là tất cả"
@@ -94,30 +92,32 @@
       el.textContent = words[Math.floor(Math.random() * words.length)];
       el.style.color = colors[Math.floor(Math.random() * colors.length)];
 
-      // font size từ 13-36, tỉ lệ với chiều sâu để tạo chiều sâu
+      // Font size 13 - 36
       const fontSize = 13 + Math.random() * 23;
       el.style.fontSize = fontSize + "px";
 
-      // Vị trí trái phải ngẫu nhiên
-      el.style.left = Math.random() * fallingAreaWidth + "px";
+      // Ngẫu nhiên ngang toàn màn
+      const leftPos = Math.random() * fallingAreaWidth;
+      el.style.left = leftPos + "px";
 
-      // Chiều sâu ±170
+      // Chiều sâu ±170 (tạo hiệu ứng 3D)
       const z = (Math.random() - 0.5) * 340;
 
       fallingArea.appendChild(el);
       currentWords.push(el);
 
-      // Tốc độ rơi (5 - 10 giây), tốc độ nhanh với font nhỏ để tạo chiều sâu
-      const speed = 5000 + (36 - fontSize) * 300 + Math.random() * 2000;
+      // Tốc độ rơi thay đổi theo font size (to hơn rơi nhanh hơn)
+      const baseDuration = 7000;
+      const duration = baseDuration - (fontSize - 13) * 150; // ~ 3000 - 7000 ms
 
       let startTime = null;
 
       function animate(time) {
         if (!startTime) startTime = time;
-        const progress = (time - startTime) / speed;
+        const progress = (time - startTime) / duration;
         if (progress > 1) {
           el.remove();
-          currentWords = currentWords.filter(e => e !== el);
+          currentWords = currentWords.filter((e) => e !== el);
           return;
         }
         const y = progress * (fallingAreaHeight + 150) - 50;
@@ -128,69 +128,47 @@
       requestAnimationFrame(animate);
     }
 
-    setInterval(createFallingWord, 200);
+    setInterval(createFallingWord, 250);
 
-    // Zoom và xoay vùng chữ
+    // Xoay vùng chữ (bỏ zoom)
     let rotationX = 0;
     let rotationY = 0;
-    let scale = 1;
+
     let lastTouch = null;
-    let lastDistance = null;
+    let resetTimeout;
 
     function setTransform() {
-      fallingArea.style.transform = `scale(${scale}) rotateX(${rotationX}deg) rotateY(${rotationY}deg)`;
+      fallingArea.style.transform = `rotateX(${rotationX}deg) rotateY(${rotationY}deg)`;
     }
 
-    // Tự động reset zoom và xoay sau 5s không tương tác, với animation mượt
-    let idleTimeout = null;
-    function resetTransformSmooth() {
-      const step = () => {
-        // Giảm xoay về 0
-        rotationX *= 0.9;
-        rotationY *= 0.9;
-        // Giảm scale về 1
-        scale += (1 - scale) * 0.1;
-
+    // Hàm reset xoay về 0 sau 5s không chạm
+    function startResetTimer() {
+      clearTimeout(resetTimeout);
+      resetTimeout = setTimeout(() => {
+        // Chạy animation CSS (đã có transition 1.5s)
+        rotationX = 0;
+        rotationY = 0;
         setTransform();
-
-        // Nếu còn khác biệt thì tiếp tục bước kế tiếp
-        if (Math.abs(rotationX) > 0.1 || Math.abs(rotationY) > 0.1 || Math.abs(scale - 1) > 0.01) {
-          requestAnimationFrame(step);
-        } else {
-          // Đặt đúng 0,1
-          rotationX = 0;
-          rotationY = 0;
-          scale = 1;
-          setTransform();
-        }
-      };
-      step();
-    }
-
-    function resetIdleTimer() {
-      if (idleTimeout) clearTimeout(idleTimeout);
-      idleTimeout = setTimeout(() => {
-        resetTransformSmooth();
       }, 5000);
     }
 
-    // Bắt đầu bộ đếm ngay khi trang tải
-    resetIdleTimer();
+    // Gọi reset timer khi bắt đầu
+    startResetTimer();
+
+    function userInteracted() {
+      clearTimeout(resetTimeout);
+      startResetTimer();
+    }
 
     fallingArea.addEventListener("touchstart", (e) => {
-      resetIdleTimer();
       if (e.touches.length === 1) {
         lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-      } else if (e.touches.length === 2) {
-        const dx = e.touches[0].clientX - e.touches[1].clientX;
-        const dy = e.touches[0].clientY - e.touches[1].clientY;
-        lastDistance = Math.hypot(dx, dy);
+        userInteracted();
       }
     });
 
     fallingArea.addEventListener("touchmove", (e) => {
       e.preventDefault();
-      resetIdleTimer();
       if (e.touches.length === 1 && lastTouch) {
         const dx = e.touches[0].clientX - lastTouch.x;
         const dy = e.touches[0].clientY - lastTouch.y;
@@ -199,34 +177,55 @@
         rotationX = Math.max(-90, Math.min(90, rotationX));
         lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
         setTransform();
-      } else if (e.touches.length === 2) {
-        const dx = e.touches[0].clientX - e.touches[1].clientX;
-        const dy = e.touches[0].clientY - e.touches[1].clientY;
-        const distance = Math.hypot(dx, dy);
-        if (lastDistance) {
-          const diff = distance - lastDistance;
-          scale += diff * 0.005;
-          scale = Math.max(0.1, Math.min(5, scale));
-          setTransform();
-        }
-        lastDistance = distance;
+        userInteracted();
       }
     }, { passive: false });
 
     fallingArea.addEventListener("touchend", (e) => {
-      if (e.touches.length < 2) lastDistance = null;
       if (e.touches.length === 0) lastTouch = null;
     });
 
-    // Zoom chuột
-    fallingArea.addEventListener("wheel", (e) => {
-      e.preventDefault();
-      resetIdleTimer();
-      scale += e.deltaY * -0.001;
-      scale = Math.max(0.1, Math.min(5, scale));
-      setTransform();
-    }, { passive: false });
+    // Xoay bằng chuột
+    let isDragging = false;
+    let lastMouse = null;
 
+    fallingArea.addEventListener("mousedown", (e) => {
+      isDragging = true;
+      lastMouse = { x: e.clientX, y: e.clientY };
+      fallingArea.style.cursor = "grabbing";
+      userInteracted();
+    });
+
+    window.addEventListener("mousemove", (e) => {
+      if (!isDragging) return;
+      const dx = e.clientX - lastMouse.x;
+      const dy = e.clientY - lastMouse.y;
+      rotationY += dx * 0.3;
+      rotationX -= dy * 0.3;
+      rotationX = Math.max(-90, Math.min(90, rotationX));
+      lastMouse = { x: e.clientX, y: e.clientY };
+      setTransform();
+      userInteracted();
+    });
+
+    window.addEventListener("mouseup", () => {
+      isDragging = false;
+      fallingArea.style.cursor = "grab";
+    });
+
+    // Phát nhạc khi click bất kỳ
+    let musicStarted = false;
+    window.addEventListener("click", () => {
+      if (!musicStarted) {
+        bgMusic.play().then(() => {
+          console.log("Nhạc đã bắt đầu phát");
+          musicStarted = true;
+        }).catch((error) => {
+          console.error("Lỗi khi phát nhạc:", error);
+          alert("Trình duyệt có thể đang chặn phát nhạc tự động.");
+        });
+      }
+    });
   </script>
 </body>
 </html>
